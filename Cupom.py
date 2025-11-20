@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from fpdf import FPDF  # <-- IMPORT CORRETO
+from fpdf import FPDF  # IMPORT CORRETO
 from datetime import datetime
 
 st.set_page_config(page_title="Cupom Fiscal - Portfólio", page_icon="🏷️", layout="centered")
@@ -128,7 +128,7 @@ if st.button("🧾 Gerar cupom e arquivos"):
         txt.append(f"Total final: R${total_final:.2f}")
         txt_blob = "\n".join(txt).encode("utf-8")
 
-        # PDF (FPDF)
+        # PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Helvetica", size=12)
@@ -149,7 +149,10 @@ if st.button("🧾 Gerar cupom e arquivos"):
         pdf.cell(0, 6, f"Desconto: R${valor_desconto:.2f}", ln=True)
         pdf.cell(0, 6, f"Total final: R${total_final:.2f}", ln=True)
 
-        pdf_bytes = pdf.output(dest="S").encode("latin-1")
+        # ---------- CORREÇÃO DO ERRO ----------
+        out = pdf.output(dest="S")
+        pdf_bytes = out if isinstance(out, bytes) else out.encode("latin-1")
+        # --------------------------------------
 
         # Download buttons
         st.download_button("📥 Baixar CSV", csv_bytes, f"{base}.csv")
