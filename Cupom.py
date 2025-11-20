@@ -1,168 +1,159 @@
-# Cupom.py - Cupom Fiscal Dinâmico (Versão Profissional - Portfólio)
+# Cupom.py - Cupom Fiscal Dinâmico (Versão Profissional)
 import streamlit as st
 import pandas as pd
 from io import BytesIO
-from fpdf2 import FPDF
+from fpdf import FPDF  # <-- IMPORT CORRETO
 from datetime import datetime
 
 st.set_page_config(page_title="Cupom Fiscal - Portfólio", page_icon="🏷️", layout="centered")
 
-# ---------- Estilo simples ----------
+# ---------- Estilo ----------
 st.markdown(
     """
     <style>
     .title { font-size:26px; font-weight:700; color:#0B3D91; margin-bottom:6px; }
     .subtitle { color:#444; margin-top:0px; margin-bottom:10px; }
-    .box { padding:12px; border-radius:8px; background:#fff; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
     </style>
     """,
     unsafe_allow_html=True
 )
 
 st.markdown("<div class='title'>🏷️ Cupom Fiscal - Versão Profissional</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Interface limpa para portfólio — adicione quantos produtos quiser.</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Adicione quantos produtos quiser — sistema dinâmico.</div>", unsafe_allow_html=True)
 st.write("---")
 
-# ---------- Inicializar session_state ----------
+# ---------- Inicializar lista de produtos ----------
 if "produtos" not in st.session_state:
-    st.session_state.produtos = []  # cada item: dict {nome, preco, qtd, subtotal}
+    st.session_state.produtos = []
 
 # ---------- Dados do cliente ----------
 with st.expander("Dados do Cliente", expanded=True):
-    col1, col2 = st.columns([3,1])
-    with col1:
-        nome = st.text_input("Nome completo", key="cli_nome")
-        cpf = st.text_input("CPF", key="cli_cpf")
-    with col2:
-        idade = st.text_input("Idade", key="cli_idade")
-        pagamento = st.selectbox("Forma de pagamento", ["Dinheiro", "Débito", "Crédito", "Pix", "Outro"], key="cli_pag")
+    nome = st.text_input("Nome completo")
+    idade = st.text_input("Idade")
+    cpf = st.text_input("CPF")
+    pagamento = st.selectbox("Forma de pagamento", ["Dinheiro", "Débito", "Crédito", "Pix", "Outro"])
 
-st.write("")
-
-# ---------- Formulário para adicionar produto ----------
+# ---------- Adicionar produto ----------
 st.markdown("### ➕ Adicionar produto")
-with st.form(key="produto_form", clear_on_submit=True):
-    p_name = st.text_input("Nome do produto", key="form_nome")
-    p_price = st.number_input("Preço (R$)", min_value=0.0, format="%.2f", key="form_preco")
-    p_qtd = st.number_input("Quantidade", min_value=1, step=1, key="form_qtd")
-    add = st.form_submit_button("Adicionar produto")
-    if add:
-        subtotal = float(p_price) * int(p_qtd)
+with st.form("form_produto", clear_on_submit=True):
+    p_nome = st.text_input("Nome do produto")
+    p_preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
+    p_qtd = st.number_input("Quantidade", min_value=1, step=1)
+    adicionar = st.form_submit_button("Adicionar")
+
+    if adicionar:
+        subtotal = p_preco * p_qtd
         st.session_state.produtos.append({
-            "Produto": p_name or "[--]",
+            "Produto": p_nome or "[--]",
             "Qtd": int(p_qtd),
-            "Preço (R$)": float(p_price),
+            "Preço (R$)": float(p_preco),
             "Subtotal (R$)": float(subtotal)
         })
-        st.success(f"Produto '{p_name}' adicionado (Qtd {p_qtd})")
+        st.success(f"Produto '{p_nome}' adicionado!")
 
-st.write("")
-
-# ---------- Lista de produtos adicionados e ações ----------
+# ---------- Lista de produtos ----------
 st.markdown("### 🧾 Itens adicionados")
+
 if st.session_state.produtos:
     df = pd.DataFrame(st.session_state.produtos)
     st.table(df.style.format({"Preço (R$)": "{:.2f}", "Subtotal (R$)": "{:.2f}"}))
 
-    colA, colB = st.columns([1,1])
-    with colA:
-        limpar = st.button("🗑️ Limpar itens")
-    with colB:
-        remover = st.selectbox("Remover item (pelo índice)", ["-"] + [f"{i+1} - {it['Produto']}" for i,it in enumerate(st.session_state.produtos)])
-        rm_btn = st.button("Remover selecionado")
+    col1, col2 = st.columns(2)
 
-    if limpar:
-        st.session_state.produtos = []
-        st.success("Lista de produtos limpa.")
-    if rm_btn and remover != "-":
-        idx = int(remover.split(" - ")[0]) - 1
-        nome_removido = st.session_state.produtos[idx]["Produto"]
-        st.session_state.produtos.pop(idx)
-        st.success(f"Removido: {nome_removido}")
+    with col1:
+        if st.button("🗑️ Limpar todos os produtos"):
+            st.session_state.produtos = []
+            st.warning("Produtos removidos.")
+
+    with col2:
+        lista_remover = ["-"] + [f"{i+1} - {p['Produto']}" for i, p in enumerate(st.session_state.produtos)]
+        rm_escolha = st.selectbox("Remover um item", lista_remover)
+        if st.button("Remover selecionado") and rm_escolha != "-":
+            idx = int(rm_escolha.split(" - ")[0]) - 1
+            removido = st.session_state.produtos.pop(idx)
+            st.success(f"Item removido: {removido['Produto']}")
 else:
-    st.info("Nenhum produto adicionado ainda. Use o formulário acima para incluir itens.")
+    st.info("Nenhum produto adicionado ainda.")
 
 st.write("---")
 
-# ---------- Desconto e geração ----------
-desconto = st.number_input("Desconto (%)", min_value=0.0, max_value=100.0, format="%.2f", value=0.0)
-gerar = st.button("🧾 Gerar cupom e arquivos")
+# ---------- Desconto ----------
+desconto = st.number_input("Desconto (%)", min_value=0.0, max_value=100.0, format="%.2f")
 
-if gerar:
-    produtos = st.session_state.produtos
-    if not produtos:
-        st.error("Adicione pelo menos um produto antes de gerar o cupom.")
+# ---------- Gerar cupom ----------
+if st.button("🧾 Gerar cupom e arquivos"):
+
+    if not st.session_state.produtos:
+        st.error("Adicione produtos antes de gerar o cupom.")
     else:
-        # cálculos
-        subtotal_values = [p["Subtotal (R$)"] for p in produtos]
-        total_bruto = sum(subtotal_values)
-        valor_desconto = total_bruto * (desconto / 100.0)
+        produtos = st.session_state.produtos
+        total_bruto = sum([p["Subtotal (R$)"] for p in produtos])
+        valor_desconto = total_bruto * (desconto / 100)
         total_final = total_bruto - valor_desconto
 
-        # Exibir cupom na tela
+        # Mostrar cupom
         st.markdown("## 📄 Cupom Fiscal")
-        st.markdown(f"**Cliente:** {nome or '[não informado]'}")
-        st.markdown(f"**Idade:** {idade}  **CPF:** {cpf}  **Pagamento:** {pagamento}")
+        st.write(f"**Cliente:** {nome}")
+        st.write(f"**Idade:** {idade}  **CPF:** {cpf}")
+        st.write(f"**Pagamento:** {pagamento}")
 
         df = pd.DataFrame(produtos)
         st.table(df.style.format({"Preço (R$)": "{:.2f}", "Subtotal (R$)": "{:.2f}"}))
 
-        st.markdown("---")
+        st.write("---")
         st.write(f"**Total bruto:** R$ {total_bruto:.2f}")
-        st.write(f"**Desconto:** {desconto:.2f}% (R$ {valor_desconto:.2f})")
+        st.write(f"**Desconto:** R$ {valor_desconto:.2f} ({desconto:.2f}%)")
         st.write(f"**Total final:** R$ {total_final:.2f}")
-        st.markdown("---")
+        st.write("---")
 
-        # preparar downloads
+        # ---------- Arquivos ----------
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         base = f"cupom_{timestamp}"
 
         # CSV
         csv_buf = BytesIO()
-        pd.DataFrame(produtos).to_csv(csv_buf, index=False, float_format="%.2f")
+        df.to_csv(csv_buf, index=False, float_format="%.2f")
         csv_bytes = csv_buf.getvalue()
 
-        # TXT (formatado)
-        txt_lines = []
-        txt_lines.append("-------------- CUPOM FISCAL --------------")
-        txt_lines.append(f"Cliente: {nome or '[--]'}")
-        txt_lines.append(f"Idade: {idade}    CPF: {cpf}    Pagamento: {pagamento}")
-        txt_lines.append("")
+        # TXT
+        txt = []
+        txt.append("-------------- CUPOM FISCAL --------------")
+        txt.append(f"Cliente: {nome}")
+        txt.append(f"Idade: {idade}    CPF: {cpf}    Pagamento: {pagamento}\n")
         for p in produtos:
-            txt_lines.append(f"{p['Produto']}  |  Qtd: {p['Qtd']}  |  Preço: R${p['Preço (R$)']:.2f}  |  Subtotal: R${p['Subtotal (R$)']:.2f}")
-        txt_lines.append("------------------------------------------")
-        txt_lines.append(f"Total bruto: R${total_bruto:.2f}")
-        txt_lines.append(f"Desconto: R${valor_desconto:.2f} ({desconto:.2f}%)")
-        txt_lines.append(f"Total final: R${total_final:.2f}")
-        txt_lines.append("------------------------------------------")
-        txt_lines.append("Obrigado e volte sempre!")
-        txt_blob = "\n".join(txt_lines).encode("utf-8")
+            txt.append(f"{p['Produto']} | Qtd: {p['Qtd']} | Preço: R${p['Preço (R$)']:.2f} | Subtotal: R${p['Subtotal (R$)']:.2f}")
+        txt.append("------------------------------------------")
+        txt.append(f"Total bruto: R${total_bruto:.2f}")
+        txt.append(f"Desconto: R${valor_desconto:.2f} ({desconto:.2f}%)")
+        txt.append(f"Total final: R${total_final:.2f}")
+        txt_blob = "\n".join(txt).encode("utf-8")
 
-        # PDF com fpdf2
+        # PDF (FPDF)
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Helvetica", size=12)
         pdf.cell(0, 8, "CUPOM FISCAL", ln=True, align="C")
-        pdf.ln(4)
+        pdf.ln(3)
+
         pdf.set_font("Helvetica", size=10)
-        pdf.cell(0, 6, f"Cliente: {nome or '[--]'}", ln=True)
+        pdf.cell(0, 6, f"Cliente: {nome}", ln=True)
         pdf.cell(0, 6, f"Idade: {idade}    CPF: {cpf}", ln=True)
         pdf.cell(0, 6, f"Pagamento: {pagamento}", ln=True)
         pdf.ln(4)
+
         for p in produtos:
             pdf.cell(0, 6, f"{p['Produto']} | Qtd: {p['Qtd']} | Preço: R${p['Preço (R$)']:.2f} | Subtotal: R${p['Subtotal (R$)']:.2f}", ln=True)
+
         pdf.ln(4)
         pdf.cell(0, 6, f"Total bruto: R${total_bruto:.2f}", ln=True)
-        pdf.cell(0, 6, f"Desconto: R${valor_desconto:.2f} ({desconto:.2f}%)", ln=True)
+        pdf.cell(0, 6, f"Desconto: R${valor_desconto:.2f}", ln=True)
         pdf.cell(0, 6, f"Total final: R${total_final:.2f}", ln=True)
+
         pdf_bytes = pdf.output(dest="S").encode("latin-1")
 
-        # downloads
-        st.download_button("📥 Baixar CSV", csv_bytes, file_name=f"{base}.csv", mime="text/csv")
-        st.download_button("📥 Baixar TXT", txt_blob, file_name=f"{base}.txt", mime="text/plain")
-        st.download_button("📥 Baixar PDF", pdf_bytes, file_name=f"{base}.pdf", mime="application/pdf")
+        # Download buttons
+        st.download_button("📥 Baixar CSV", csv_bytes, f"{base}.csv")
+        st.download_button("📥 Baixar TXT", txt_blob, f"{base}.txt")
+        st.download_button("📥 Baixar PDF", pdf_bytes, f"{base}.pdf", mime="application/pdf")
 
-        st.success("Cupom gerado com sucesso! (Arquivos prontos para download)")
-
-st.markdown("---")
-st.markdown("**Base:** code adapted from `/mnt/data/App.py`")
+        st.success("Cupom gerado com sucesso!")
